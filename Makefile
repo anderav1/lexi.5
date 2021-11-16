@@ -38,4 +38,4 @@ $(OBJ): %.o: %.c $(DEPS)
 # cleanup
 .PHONY: clean
 clean:
-	rm -f $(TAR) $(OBJ)
+	rm -f $(TAR) $(TAR:=.o) $(OBJ)
