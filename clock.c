@@ -5,7 +5,9 @@
 
 
 #include <stdlib.h>
+#include <string.h>
 #include "clock.h"
+
 
 #define MAX_NS 1e9  // value at which to convert ns to s
 
