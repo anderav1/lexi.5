@@ -31,11 +31,14 @@ static SysData* sysdata = NULL;
 
 static Resource rss;  // resource descriptor
 static Queue* procq;
-static Clock nextForkTime;
+static Clock* nextForkTime;
 
 static pid_t pids[MAX_USER_PROCS];
 static int activeprocs = 0;
 static int exitedprocs = 0;
+static int totalprocs = 0;
+
+volatile sig_atomic_t got_interrupt = 0;
 
 
 // function declarations
@@ -43,8 +46,16 @@ void initsysdata();
 void initresources();
 void initIPC();
 void releaseIPC();
+void locksem(int);
+void unlocksem(int);
 
+void runsim();
 void errexit(char*);
+void tryfork();
+void newuserproc(int);
+int getpidsim();
+void setupPCB(pid_t, int);
+void updateclock();
 
 
 int main(int argc, char** argv) {
@@ -52,8 +63,9 @@ int main(int argc, char** argv) {
 
 	executable = argv[0];
 
-	initsysdata();  // initialize system data
-	initIPC();  // initialize shared mem, semaphore, msg queue
+	initsysdata();  // system data
+	initIPC();  // shared mem, semaphore, msg queue
+	initresources();  // resource descriptors
 	memset(pids, 0, sizeof(pids));  // initialize all pids to 0
 
 	// set next fork time
@@ -62,9 +74,13 @@ int main(int argc, char** argv) {
 
 	procq = createqueue(MAX_USER_PROCS);  // create empty process queue
 
-// TODO: initialize resource descriptors
+// TODO: set up log file
 
-// TODO: start simulation
+// TODO: set up signal handling
+
+	runsim();
+
+// TODO: anything that needs to be done after simulation ends
 
 	releaseIPC();
 	puts("Program finished successfully");
@@ -140,6 +156,28 @@ void releaseIPC() {
 	if (msgqid > 0 && msgctl(msgqid, IPC_RMID, NULL) == -1) errexit("msgctl rmid");
 }
 
+void locksem(int ind) {
+	struct sembuf ops = { ind, -1, SEM_UNDO };
+	if (semop(semid, &ops, 1) == -1) errexit("semop lock");
+}
+
+void unlocksem(int ind) {
+	struct sembuf ops = { ind, 1, SEM_UNDO };
+	if (semop(semid, &ops, 1) == -1) errexit("semop unlock");
+}
+
+void runsim() {
+	// TODO: implement runsim function
+
+	while (!got_interrupt) {
+		// TODO: see if it is possible to fork a new proc
+
+		// TODO: update the clock
+
+		tryfork();
+	}
+}
+
 void errexit(char* msg) {
 	char errmsg[1024];
 	snprintf(errmsg, 1024, "%s: %s", executable, msg);
@@ -147,4 +185,54 @@ void errexit(char* msg) {
 
 	releaseIPC();
 	exit(1);
+}
+
+void tryfork() {
+	if (activeprocs >= MAX_USER_PROCS) return;
+	if (totalprocs >= MAX_PROCS_GENERATED) return;
+
+	resetclock(nextForkTime);
+
+	int pidsim = getpidsim();
+	// TODO: get simulated pid
+
+	if (pidsim != -1) newuserproc(pidsim);
+}
+
+void newuserproc(int pidsim) {
+	pid_t pid = fork();
+	if ((pids[pidsim] = pid) == -1) errexit("fork");
+	else if (pid == 0) { // child; generate new user proc
+		printf("Executing user process %d\n", pidsim);
+		char arg[1024];
+		snprintf(arg, 1024, "%d", pidsim);
+		execl("./user_proc", "user_proc", arg, (char*)NULL);
+		errexit("execl");
+	}
+	// parent
+	// TODO: set up pcb for new process
+	setupPCB(pid, pidsim);
+	// TODO: push process onto the queue
+	activeprocs++;
+	totalprocs++;
+}
+
+// Get the index of the next available pid
+int getpidsim() {
+	for (int i = 0; i < MAX_USER_PROCS; i++) {
+		if (pids[i] == 0) return i;
+	} else return(-1);
+}
+
+void setupPCB(pid_t pid, int pidsim) {
+	// TODO: implement function
+}
+
+// Increment the clock by a random interval
+void updateclock() {
+	locksem(0);
+	int interval = rand() % (10 * MAX_NS) + 1;
+	addtoclock(nextForkTime, interval);
+	addtoclock(sysdata->clock, interval);
+	unlocksem(0);
 }
