@@ -26,6 +26,7 @@ void pushq(Queue* q, int item) {
 		q->arr[q->tail] = item;
 		q->size += 1;
 	}
+	rotatequeue(q);  // update queue rotation
 	// TODO: handle case where queue is full
 }
 
@@ -36,6 +37,7 @@ int popq(Queue* q) {
 		q->head = (q->head + 1) % q->capacity;  // update head
 		q->size -= 1;
 
+		rotatequeue(q);  // update queue rotation so head is at 0
 		return item;
 	} else return(-1);
 }
@@ -49,6 +51,16 @@ bool queuefull(Queue* q) { return (q->size == q->capacity); }
 
 bool queueempty(Queue* q) { return (q->size == 0); }
 
-void printqueue(Queue* q) {
-	// TODO: implement printqueue function
+// Rotate queue array so that head lies at index 0
+void rotatequeue(Queue* q) {
+	if (q->head != 0) {
+		int shift = q->head;
+		int tmp[NUM_RSS];
+
+		for (int i = 0; i < q->capacity; i++)
+			tmp[i] = q->arr[(shift + i) % q->capacity];
+
+		memcpy(q->arr, tmp, NUM_RSS);
+		free(tmp);
+	}
 }

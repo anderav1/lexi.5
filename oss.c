@@ -11,6 +11,7 @@
 #include <sys/sem.h>
 #include <sys/shm.h>
 #include <sys/time.h>
+#include <unistd.h>
 #include "queue.h"
 #include "shm.h"
 
@@ -40,6 +41,8 @@ volatile sig_atomic_t got_interrupt = 0;
 
 // function declarations
 
+void setupsighandler();
+void sighandler(int);
 void initsysdata();
 void initresources();
 void initIPC();
@@ -55,9 +58,19 @@ int getpidsim();
 void setupPCB(pid_t, int);
 void updateclock();
 
+void resetlogfile();
+void log(char*, ...);
+void printresources();
+void printarray(char*, int[NUM_RSS]);
+void printmatrix(char*, int[][NUM_RSS], Queue*, int);
+void printstats();
+
 
 
 int main(int argc, char** argv) {
+	setupsighandler();
+	resetlogfile();
+
 	// TODO: check command line args
 
 	executable = argv[0];
@@ -76,10 +89,6 @@ int main(int argc, char** argv) {
 
 	procq = createqueue(MAX_USER_PROCS);  // create empty process queue
 
-// TODO: set up log file
-
-// TODO: set up signal handling
-
 	runsim();
 
 // TODO: anything that needs to be done after simulation ends
@@ -87,6 +96,38 @@ int main(int argc, char** argv) {
 	releaseIPC();
 	puts("Program finished successfully");
 	return(0);
+}
+
+void setupsighandler() {
+	alarm(MAX_TIME); // SIGALRM
+
+	signal(SIGINT, sighandler);
+	signal(SIGALRM, sighandler);
+	signal(SIGUSR1, SIG_IGN);
+	signal(SIGABRT, sighandler);
+}
+
+void sighandler(int signum) {
+	// TODO: implement
+	
+
+	switch (signum) {
+		case SIGALRM:
+			// TODO: any logging?
+			got_interrupt = 1;
+			break;
+
+		default:
+			printf("Got signal %d\n", signum);
+			printstats();
+
+			// kill user procs
+			kill(0, SIGUSR1);
+
+			releaseIPC();
+			exit(0);
+	}
+
 }
 
 
@@ -184,8 +225,8 @@ void runsim() {
 
 // Send error message and exit
 void errexit(char* msg) {
-	char errmsg[1024];
-	snprintf(errmsg, 1024, "%s: %s", executable, msg);
+	char errmsg[MSG_SZ];
+	snprintf(errmsg, MSG_SZ, "%s: %s", executable, msg);
 	perror(errmsg);
 
 	releaseIPC();
@@ -209,8 +250,8 @@ void newuserproc(int pidsim) {
 	if ((pids[pidsim] = pid) == -1) errexit("fork");
 	else if (pid == 0) { // child; generate new user proc
 		printf("Executing user process %d\n", pidsim);
-		char arg[1024];
-		snprintf(arg, 1024, "%d", pidsim);
+		char arg[MSG_SZ];
+		snprintf(arg, MSG_SZ, "%d", pidsim);
 		execl("./user_proc", "user_proc", arg, (char*)NULL);
 		errexit("execl");
 	}
@@ -249,4 +290,100 @@ void updateclock() {
 	addtoclock(nextForkTime, interval);
 	addtoclock(sysdata->clock, interval);
 	unlocksem(0);  // unlock clock
+}
+
+// Erase any contents already in the log file
+void resetlogfile() {
+	FILE* fp;
+	if ((fp = fopen(LOG_FILE, "w")) == NULL) errexit("fopen");
+	if (fclose(fp) == EOF) errexit("fclose");
+}
+
+// Write to log
+void log(char* format, ...) {
+	FILE* fp;
+	if ((fp = fopen(LOG_FILE, "a+")) == NULL) errexit("fopen");
+
+	char msg[MSG_SZ];
+	// create a variable arg list for any args
+	va_list args;
+	va_start(args, format);
+	vsnprintf(msg, MSG_SZ, format, args);  // print va_list to string msg
+	va_end(args);
+
+	// print string to log
+	fprintf(fp, msg);
+/*TEST*/fprintf(stdout, msg);
+
+	if (fclose(fp) == EOF) errexit("fclose");
+}
+
+// Print resource descriptors
+void printresources() {
+	if (queueempty()) errexit("queueempty");
+
+	int maximum[qsize][NUM_RSS];  // maximum matrix
+	int allocation[qsize][NUM_RSS];  // allocation matrix
+	int available[NUM_RSS];  // availability vector
+
+	// loop through resources
+	for (int i = 0; i < NUM_RSS; i++)
+		available[i] = rss.instances[i];
+
+	// loop through queue
+	for (int i = 0; i < q->size; i++) {
+		while (q->arr[i] == 0) continue;  // skip empty
+
+		for (j = 0; j < NUM_RSS; j++) :
+			maximum[i][j] = sysdata->pcb[i].maximum[j];
+			allocation[i][j] = sysdata->pcb[i].allocation[j];
+			available[j] -= allocation[i][j];
+		}
+	}
+
+	printarray("Total Resources", rss.instances);
+	printarray("Shared Resources", rss.shareable);
+	printarray("Available Resources", available);
+
+	printmatrix("Allocated Resources", q, allocation);
+	printmatrix("Maximum Resources", q, maximum);
+}
+
+// Print contents of array
+void printarray(char* header, int arr[NUM_RSS]) {
+	log("%s\n", header);
+
+	for (int i = 0; i < NUM_RSS; i++) log(" R%2d", i);
+	log("\n");
+
+	for (int i = 0; i < NUM_RSS; i++) log(" %2d", arr[i]);
+	log("\n");
+}
+
+// Print contents of matrix
+void printmatrix(char* header, int mat[][NUM_RSS], Queue* q) {
+	if (queueempty(q)) errexit("queueempty");
+
+	log("%s\n", header);
+
+	for (int i = 0; i < NUM_RSS; i++) log(" R%2d", i);
+	log("\n");
+
+	for (int i = 0; i < q->capacity; i++) {
+		while (q->arr[i] == 0) continue;  // skip empty
+
+		log("p%2d ", i);
+		for (int j = 0; j < NUM_RSS; j++) {
+			log(" %2d", mat[i][j]);
+		}
+		log("\n");
+	}
+}
+
+// Print program statistics
+void printstats() {
+	log("\n\nProgram ended at system time %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
+	log("%d total processes executed\n", totalprocs);
+	log("%d processes exited previously\n", exitedprocs);
+	log("%d processes active at time of termination", activeprocs);
 }

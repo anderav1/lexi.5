@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include "clock.h"
 
+#define LOG_FILE "logfile"
+
 #define IPC_FTOK "./Makefile"
 #define IPC_PERM (S_IRUSR | S_IWUSR)
 

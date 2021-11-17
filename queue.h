@@ -1,5 +1,5 @@
 // Lexi Anderson
-// Last modified: Nov 16, 2021
+// Last modified: Nov 17, 2021
 // CS 4760, Project 5
 // queue.h
 
@@ -9,8 +9,9 @@
 
 #include <stdbool.h>
 
+
 typedef struct {
-	int head, tail;
+	int head, tail;  // array indices of first and last items
 	int size, capacity;
 	int* arr;
 } Queue;
@@ -22,9 +23,9 @@ Queue* createqueue(int);
 void pushq(Queue*, int);
 int popq(Queue*);
 int peekq(Queue*);
+int getheadindex(Queue*);
 bool queuefull(Queue*);
 bool queueempty(Queue*);
-void printqueue(Queue*);
-
+void rotatequeue(Queue*);
 
 #endif

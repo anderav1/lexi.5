@@ -28,13 +28,10 @@ static SysData* sysdata = NULL;
 int pidsim;
 static Message msg;
 
-
 // function declarations
-
 void initIPC();
-void releaseIPC();
-
 void errexit(char*);
+void sighandler(int);
 
 
 
