@@ -1,5 +1,5 @@
 // Author: Lexi Anderson
-// Last modified: Nov 16, 2021
+// Last modified: Nov 17, 2021
 // CS 4760, Project 5
 // oss.c
 
@@ -10,12 +10,9 @@
 #include <sys/msg.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
-#include <sys/stat.h>
+#include <sys/time.h>
 #include "queue.h"
 #include "shm.h"
-
-#define IPC_FTOK "./Makefile"
-#define IPC_PERM (S_IRUSR | S_IWUSR)
 
 // termination criteria
 #define MAX_PROCS_GENERATED 40
@@ -42,6 +39,7 @@ volatile sig_atomic_t got_interrupt = 0;
 
 
 // function declarations
+
 void initsysdata();
 void initresources();
 void initIPC();
@@ -58,10 +56,14 @@ void setupPCB(pid_t, int);
 void updateclock();
 
 
+
 int main(int argc, char** argv) {
 	// TODO: check command line args
 
 	executable = argv[0];
+
+	// seed rand
+	srand((getpid() << 16) ^ time(NULL));
 
 	initsysdata();  // system data
 	initIPC();  // shared mem, semaphore, msg queue
@@ -144,6 +146,7 @@ void initIPC() {
 		errexit("msgget");
 }
 
+// Clean up shared memory, semaphore, message queue
 void releaseIPC() {
 	// shared memory
 	if (sysdata != NULL && shmdt(sysdata) == -1) errexit("shmdt");
@@ -156,28 +159,30 @@ void releaseIPC() {
 	if (msgqid > 0 && msgctl(msgqid, IPC_RMID, NULL) == -1) errexit("msgctl rmid");
 }
 
+// Lock semaphore
 void locksem(int ind) {
 	struct sembuf ops = { ind, -1, SEM_UNDO };
 	if (semop(semid, &ops, 1) == -1) errexit("semop lock");
 }
 
+// Unlock semaphore
 void unlocksem(int ind) {
 	struct sembuf ops = { ind, 1, SEM_UNDO };
 	if (semop(semid, &ops, 1) == -1) errexit("semop unlock");
 }
 
+// Run the simulation
 void runsim() {
 	// TODO: implement runsim function
 
 	while (!got_interrupt) {
-		// TODO: see if it is possible to fork a new proc
-
-		// TODO: update the clock
-
+	
+		updateclock();
 		tryfork();
 	}
 }
 
+// Send error message and exit
 void errexit(char* msg) {
 	char errmsg[1024];
 	snprintf(errmsg, 1024, "%s: %s", executable, msg);
@@ -187,6 +192,7 @@ void errexit(char* msg) {
 	exit(1);
 }
 
+// Check fork criteria
 void tryfork() {
 	if (activeprocs >= MAX_USER_PROCS) return;
 	if (totalprocs >= MAX_PROCS_GENERATED) return;
@@ -194,11 +200,10 @@ void tryfork() {
 	resetclock(nextForkTime);
 
 	int pidsim = getpidsim();
-	// TODO: get simulated pid
-
 	if (pidsim != -1) newuserproc(pidsim);
 }
 
+// Create a new user process
 void newuserproc(int pidsim) {
 	pid_t pid = fork();
 	if ((pids[pidsim] = pid) == -1) errexit("fork");
@@ -209,10 +214,10 @@ void newuserproc(int pidsim) {
 		execl("./user_proc", "user_proc", arg, (char*)NULL);
 		errexit("execl");
 	}
+
 	// parent
-	// TODO: set up pcb for new process
 	setupPCB(pid, pidsim);
-	// TODO: push process onto the queue
+	pushq(q, pidsim);  // push new proc onto queue
 	activeprocs++;
 	totalprocs++;
 }
@@ -224,15 +229,24 @@ int getpidsim() {
 	} else return(-1);
 }
 
+// Set up PCB for a process
 void setupPCB(pid_t pid, int pidsim) {
-	// TODO: implement function
+	PCB* pcb = &sysdata->pcb[pidsim];
+	pcb->pid = pid;
+	pcb->pidsim = pidsim;
+
+	for (int i = 0; i < NUM_RSS; i++) {
+		pcb->allocation[i] = 0;
+		pcb->request[i] = 0;
+		pcb->maximum[i] = (rand() % rss.instances[i]) + 1;
+	}
 }
 
 // Increment the clock by a random interval
 void updateclock() {
-	locksem(0);
+	locksem(0);  // lock clock
 	int interval = rand() % (10 * MAX_NS) + 1;
 	addtoclock(nextForkTime, interval);
 	addtoclock(sysdata->clock, interval);
-	unlocksem(0);
+	unlocksem(0);  // unlock clock
 }

@@ -17,10 +17,12 @@ typedef struct {
 
 
 void setclock(Clock*, int);
+int getns(Clock*);
 void addtoclock(Clock*, int);
 void subtractfromclock(Clock*, Clock*);
 void resetclock(Clock*);
 void copyclock(Clock*, Clock*);
+int getclockdiff(Clock*, Clock*);
 
 
 #endif

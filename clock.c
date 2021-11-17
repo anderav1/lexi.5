@@ -22,6 +22,12 @@ void setclock(Clock* clock, int ns) {
 	}
 }
 
+// Get the clock value in ns
+int getns(Clock* clock) {
+	return ((clock->s * MAX_NS) + clock->ns);
+}
+
+// Add ns to clock
 void addtoclock(Clock* clock, int ns) {
 	clock->ns += ns;
 	while (clock->ns >= MAX_NS) {
@@ -33,8 +39,8 @@ void addtoclock(Clock* clock, int ns) {
 // Rewind Clock tar by the value of Clock diff
 void subtractfromclock(Clock* tar, Clock* diff) {
 	// convert to ns
-	int tartons = (tar->s * MAX_NS) + tar->ns;
-	int difftons = (diff->s * MAX_NS) + diff->ns;
+	int tartons = getns(tar);
+	int difftons = getns(diff);
 
 	// set clock
 	setclock(tar, tartons - difftons);
@@ -49,4 +55,12 @@ void resetclock(Clock* clock) {
 // Copy the value of Clock src to Clock tar
 void copyclock(Clock* tar, Clock* src) {
 	memcpy(src, tar, sizeof(Clock));
+}
+
+// Get minuend - subtrahend in ns
+int getclockdiff(Clock* minuend, Clock* subtrahend) {
+	Clock* temp = (Clock*)malloc(sizeof(Clock));
+	copyclock(temp, minuend);
+	subtractfromclock(temp, subtrahend);
+	return getns(temp);
 }
