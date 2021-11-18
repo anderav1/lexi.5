@@ -100,12 +100,32 @@ int main(int argc, char** argv) {
 
 /*TEST*/
 	Queue* example = createqueue(11);
+	printqueue(example);
+
 	for (int i = 0; i < 11; i++) {
 		pushq(example, i);
+		printqueue(example);
+		if (i >= 4) {
+			printf("Removing item %d\n", i - 4);
+			removefromqueue(example, i - 4);
+			printf("Head at array index %d\n", example->head);
+			printqueue(example);
+		}
 	}
 
-	int matrix[example->size][NUM_RSS];
-	for (int i = 0; i < example->size; i++) {
+	int index = 3;
+	printf("Removing item at index %d\n", index);
+	removefromqueue(example, index);
+	printqueue(example);
+
+	index = 7;
+	printf("Removing item at index %d\n", index);
+	removefromqueue(example, index);
+	printqueue(example);
+
+	int matrix[example->capacity][NUM_RSS];
+	for (int i = 0; i < example->capacity; i++) {
+		if (example->arr[i] == -1) continue;
 		for (int j = 0; j < NUM_RSS; j++) {
 			matrix[i][j] = rand() % 5;
 		}
@@ -380,7 +400,8 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	int dd[NUM_RSS];  // hypothetically available resources used in deadlock detection
 
 	// loop through queue
-	for (int i = 0; i < qsize; i++) {
+	for (int i = 0; i < q->capacity; i++) {
+		if (q->arr[i] == -1) continue;
 		for (int j = 0; j < NUM_RSS; j++) {
 			max[i][j] = sysdata->pcb[i].maximum[j];
 			alloc[i][j] = sysdata->pcb[i].allocation[j];
@@ -395,7 +416,8 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		req[i] = request[i];
 	}
 
-	for (int i = 0; i < qsize; i++) {
+	for (int i = 0; i < q->capacity; i++) {
+		if (q->arr[i] == -1) continue;
 		for (int j = 0; j < NUM_RSS; j++) {
 			if (!rss.shareable[j]) {
 				avail[j] -= alloc[i][j];
@@ -404,7 +426,6 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		}
 	}
 
-	// TODO: verbose
 	if (verbose) {
 		printarray("Resource Requests", request);
 		printmatrix("Resource Allocation", q, alloc);
@@ -412,8 +433,8 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		printmatrix("Resources Needed", q, need);
 	}
 
-	bool done[qsize];
-	int allocseq[qsize];  // resource allocation sequence
+	bool done[q->capacity];
+	int allocseq[q->capacity];  // resource allocation sequence
 
 	for (int j = 0; j < NUM_RSS; j++) {
 		if (need[ind][j] < req[j]) {
@@ -444,7 +465,8 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	while (k < qsize) {
 		bool found = false;
 		int j;
-		for (int i = 0; i < qsize; i++) {
+		for (int i = 0; i < q->capacity; i++) {
+			if (q->arr[i] == -1) continue;
 			if (!done[i]) {
 				for (j = 0; j < NUM_RSS; j++)
 					if (need[i][j] > dd[j]) break;
@@ -586,15 +608,14 @@ void printresources() {
 		available[i] = rss.instances[i];
 
 	// loop through queue
-	for (int i = 0, k = 0; i < q->capacity && k < q->size; i++) {
-		while (q->arr[i] == 0) continue;  // skip empty
+	for (int i = 0; i < q->capacity; i++) {
+		if (q->arr[i] == -1) continue;  // skip empty
 
 		for (int j = 0; j < NUM_RSS; j++) {
 			maximum[i][j] = sysdata->pcb[i].maximum[j];
 			allocation[i][j] = sysdata->pcb[i].allocation[j];
 			available[j] -= allocation[i][j];
 		}
-		k++;
 	}
 
 	printarray("Total Resources", rss.instances);
@@ -626,7 +647,7 @@ void printmatrix(char* header, Queue* q, int mat[][NUM_RSS]) {
 	log("\n");
 
 	for (int i = 0; i < q->capacity; i++) {
-		//while (q->arr[i] == 0) continue;  // skip empty
+		if (q->arr[i] == -1) continue;  // skip empty
 
 		log("p%-2d\t", i);
 		for (int j = 0; j < NUM_RSS; j++) {

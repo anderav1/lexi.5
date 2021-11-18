@@ -21,12 +21,12 @@ typedef struct {
 
 Queue* createqueue(int);
 void pushq(Queue*, int);
-int popq(Queue*);
 int peekq(Queue*);
 int getheadindex(Queue*);
 bool queuefull(Queue*);
 bool queueempty(Queue*);
 void rotatequeue(Queue*);
 void removefromqueue(Queue*, int);
+void printqueue(Queue*);
 
 #endif
