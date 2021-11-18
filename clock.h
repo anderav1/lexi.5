@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 
-#define MAX_NS (int)1e9  // value at which to convert ns to s
+#define MAX_NS (unsigned int)1e9  // value at which to convert ns to s
 
 typedef struct {
 	unsigned int s;  // seconds

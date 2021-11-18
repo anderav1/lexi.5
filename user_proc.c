@@ -23,9 +23,9 @@ static int shmid = -1;
 static int msgqid = -1;
 
 static SysData* sysdata = NULL;
+static Message msg;
 
 int pidsim;
-static Message msg;
 
 // function declarations
 void initIPC();
@@ -120,14 +120,14 @@ void initIPC() {
 	// shared memory
 	key_t key;
 	if ((key = ftok(IPC_FTOK, 0)) == -1) errexit("ftok");
-	if ((shmid = shmget(key, sizeof(SysData), IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1)
+	if ((shmid = shmget(key, sizeof(SysData), 0)) == -1)
 		errexit("shmget");
 	if ((sysdata = (SysData*)shmat(shmid, NULL, 0)) == (void*)(-1))
 		errexit("shmat");
 
 	// message queue
 	if ((key = ftok(IPC_FTOK, 2)) == -1) errexit("ftok");
-	if ((msgqid = msgget(key, IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1)
+	if ((msgqid = msgget(key, 0)) == -1)
 		errexit("msgget");
 }
 

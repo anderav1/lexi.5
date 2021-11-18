@@ -62,7 +62,7 @@ static int msgqid = -1;
 
 static SysData* sysdata = NULL;
 
-static Resource* rss;  // resource descriptor
+static Resource rss;  // resource descriptor
 static Queue* q;
 static Clock nextForkTime;
 static Message msg;
@@ -88,16 +88,18 @@ int main(int argc, char** argv) {
 	// seed rand
 	srand((getpid() << 16) ^ time(NULL));
 
-	initsysdata();  // system data
 	initIPC();  // shared mem, semaphore, msg queue
-	initresources();  // resource descriptors
+	initsysdata();  // system data
+	puts("System data initialized");
 	memset(pids, 0, sizeof(pids));  // initialize all pids to 0
+	q = createqueue(MAX_USER_PROCS);  // create empty process queue
+	puts("Queue created");
+	initresources();  // resource descriptors
+	puts("Resource descriptors initialized");
 
 	// set next fork time
 	nextForkTime.s = 0;
 	nextForkTime.ns = 0;
-
-	q = createqueue(MAX_USER_PROCS);  // create empty process queue
 
 	runsim();
 
@@ -122,7 +124,6 @@ void sighandler(int signum) {
 
 	switch (signum) {
 		case SIGALRM:
-			// TODO: any logging?
 			got_interrupt = 1;
 			break;
 
@@ -154,9 +155,11 @@ void initsysdata() {
 
 // Set up resource descriptors
 void initresources() {
-	for (int i = 0; i < NUM_RSS; i++)
+	for (int i = 0; i < NUM_RSS; i++) {
 		// generate random number of instances
-		rss->instances[i] = rand() % 10 + 1;  // int in [1, 10]
+		rss.instances[i] = rand() % 10 + 1;  // int in [1, 10]
+	}
+	puts("Generated instances for each resource");
 
 	// determine which resources are shareable
 	int min = NUM_RSS * 0.15;
@@ -166,8 +169,8 @@ void initresources() {
 		bool set = false;
 		while (!set) {  // loop until a new shared resource has been set
 			int ind = rand() % NUM_RSS;
-			if (!rss->shareable[ind]) {
-				rss->shareable[ind] = true;
+			if (!rss.shareable[ind]) {
+				rss.shareable[ind] = true;
 				set = true;
 			}
 		}
@@ -179,21 +182,25 @@ void initIPC() {
 	// shared memory
 	key_t key;
 	if ((key = ftok(IPC_FTOK, 0)) == -1) errexit("ftok");
-	if ((shmid = shmget(key, sizeof(SysData), IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1)
+	if ((shmid = shmget(key, sizeof(SysData), IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1) {
 		errexit("shmget");
-	if ((sysdata = (SysData*)shmat(shmid, NULL, 0)) == (void*)(-1))
+	}
+	if ((sysdata = (SysData*)shmat(shmid, NULL, 0)) == (void*)(-1)) {
 		errexit("shmat");
+	}
 
 	// semaphore
 	if ((key = ftok(IPC_FTOK, 1)) == -1) errexit("ftok");
-	if ((semid = semget(key, 1, IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1)
+	if ((semid = semget(key, 1, IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1) {
 		errexit("semget");
+	}
 	if (semctl(semid, 0, SETVAL, 1) == -1) errexit("semctl setval");
 
 	// message queue
 	if ((key = ftok(IPC_FTOK, 2)) == -1) errexit("ftok");
-	if ((msgqid = msgget(key, IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1)
+	if ((msgqid = msgget(key, IPC_EXCL | IPC_CREAT | IPC_PERM)) == -1) {
 		errexit("msgget");
+	}
 }
 
 // Clean up shared memory, semaphore, message queue
@@ -240,14 +247,18 @@ void runsim() {
 		}
 	}
 
-	if (got_interrupt && (exitedprocs == totalprocs)) return;
-	if (exitedprocs == MAX_PROCS_GENERATED) return;
+	if (got_interrupt && (exitedprocs == totalprocs)) {
+		releaseIPC();
+		return;
+	}
+	if (exitedprocs == MAX_PROCS_GENERATED) {
+		releaseIPC();
+		return;
+	}
 }
 
 // Communicate with user procs via message queue and act accordingly
 void manageuserprocs() {
-	// TODO
-
 	while (!queueempty(q)) {
 		updateclock();
 
@@ -370,14 +381,14 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 
 	// loop through resources
 	for (int i = 0; i < NUM_RSS; i++) {
-		avail[i] = rss->instances[i];
+		avail[i] = rss.instances[i];
 		dd[i] = avail[i];
 		req[i] = request[i];
 	}
 
 	for (int i = 0; i < qsize; i++) {
 		for (int j = 0; j < NUM_RSS; j++) {
-			if (!rss->shareable[j]) {
+			if (!rss.shareable[j]) {
 				avail[j] -= alloc[i][j];
 				dd[i] = avail[i];
 			}
@@ -506,7 +517,7 @@ void setupPCB(pid_t pid, int pidsim) {
 	for (int i = 0; i < NUM_RSS; i++) {
 		pcb->allocation[i] = 0;
 		pcb->request[i] = 0;
-		pcb->maximum[i] = (rand() % rss->instances[i]) + 1;
+		pcb->maximum[i] = (rand() % rss.instances[i]) + 1;
 	}
 }
 
@@ -556,7 +567,7 @@ void printresources() {
 
 	// loop through resources
 	for (int i = 0; i < NUM_RSS; i++)
-		available[i] = rss->instances[i];
+		available[i] = rss.instances[i];
 
 	// loop through queue
 	for (int i = 0, k = 0; i < q->capacity && k < q->size; i++) {
@@ -570,8 +581,8 @@ void printresources() {
 		k++;
 	}
 
-	printarray("Total Resources", rss->instances);
-	printarray("Shared Resources", rss->shareable);
+	printarray("Total Resources", rss.instances);
+	printarray("Shared Resources", rss.shareable);
 	printarray("Available Resources", available);
 
 	printmatrix("Allocated Resources", q, allocation);
@@ -614,5 +625,5 @@ void printstats() {
 	log("\n\nProgram ended at system time %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
 	log("%d total processes executed\n", totalprocs);
 	log("%d processes exited previously\n", exitedprocs);
-	log("%d processes active at time of termination", activeprocs);
+	log("%d processes active at time of termination\n", activeprocs);
 }
