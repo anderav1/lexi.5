@@ -9,7 +9,7 @@
 #include "clock.h"
 
 
-void setclock(Clock clock, int ns) {
+Clock setclock(Clock clock, int ns) {
 	clock.s = 0;
 	clock.ns = ns;
 
@@ -17,6 +17,7 @@ void setclock(Clock clock, int ns) {
 		clock.s += 1;
 		clock.ns -= MAX_NS;
 	}
+	return clock;
 }
 
 // Get the clock value in ns
@@ -25,35 +26,39 @@ int getns(Clock clock) {
 }
 
 // Add ns to clock
-void addtoclock(Clock clock, int ns) {
+Clock addtoclock(Clock clock, int ns) {
 	clock.ns += ns;
 	while (clock.ns >= MAX_NS) {
 		clock.s += 1;
 		clock.ns -= MAX_NS;
 	}
+	return clock;
 }
 
 // Rewind Clock tar by the value of Clock diff
-void subtractfromclock(Clock tar, Clock diff) {
+Clock subtractfromclock(Clock tar, Clock diff) {
 	// convert to ns
 	int tartons = getns(tar);
 	int difftons = getns(diff);
 
 	// set clock
-	setclock(tar, tartons - difftons);
+	return setclock(tar, tartons - difftons);
 }
 
 // Reset clock to zero
-void resetclock(Clock clock) {
+Clock resetclock(Clock clock) {
 	clock.s = 0;
 	clock.ns = 0;
+
+	return clock;
 }
 
 // Copy the value of Clock src to Clock tar
-void copyclock(Clock tar, Clock src) {
-//	memcpy(src, tar, sizeof(Clock));
+Clock copyclock(Clock tar, Clock src) {
 	tar.s = src.s;
 	tar.ns = src.ns;
+
+	return tar;
 }
 
 // Get minuend - subtrahend in ns

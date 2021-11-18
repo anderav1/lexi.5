@@ -1,9 +1,9 @@
-./oss detected process p0 requesting the following resources at time 0.0:
+./oss detected process p0 requesting the following resources at time 1.679306249:
 
-	./oss granted P0 request at time 0.0
+	./oss granted P0 request at time 1.679306249
 
 
-Program ended at system time 0.0
+Program ended at system time 2.112669292
 1 total processes executed
 0 processes exited previously
 1 processes active at time of termination

@@ -90,12 +90,9 @@ int main(int argc, char** argv) {
 
 	initIPC();  // shared mem, semaphore, msg queue
 	initsysdata();  // system data
-	puts("System data initialized");
 	memset(pids, 0, sizeof(pids));  // initialize all pids to 0
 	q = createqueue(MAX_USER_PROCS);  // create empty process queue
-	puts("Queue created");
 	initresources();  // resource descriptors
-	puts("Resource descriptors initialized");
 
 	// set next fork time
 	nextForkTime.s = 0;
@@ -119,9 +116,6 @@ void setupsighandler() {
 }
 
 void sighandler(int signum) {
-	// TODO: implement
-	
-
 	switch (signum) {
 		case SIGALRM:
 			got_interrupt = 1;
@@ -159,7 +153,6 @@ void initresources() {
 		// generate random number of instances
 		rss.instances[i] = rand() % 10 + 1;  // int in [1, 10]
 	}
-	puts("Generated instances for each resource");
 
 	// determine which resources are shareable
 	int min = NUM_RSS * 0.15;
@@ -396,6 +389,12 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	}
 
 	// TODO: verbose
+	if (verbose) {
+		printarray("Resource Requests", request);
+		printmatrix("Resource Allocation", q, alloc);
+		printmatrix("Maximum Resources", q, max);
+		printmatrix("Resources Needed", q, need);
+	}
 
 	bool done[qsize];
 	int allocseq[qsize];  // resource allocation sequence
@@ -474,6 +473,7 @@ void errexit(char* msg) {
 void tryfork() {
 	if (activeprocs >= MAX_USER_PROCS) return;
 	if (totalprocs >= MAX_PROCS_GENERATED) return;
+	if (got_interrupt) return;
 
 	resetclock(nextForkTime);
 
@@ -525,8 +525,8 @@ void setupPCB(pid_t pid, int pidsim) {
 void updateclock() {
 	locksem(0);  // lock clock
 	int interval = rand() % (10 * MAX_NS) + 1;
-	addtoclock(nextForkTime, interval);
-	addtoclock(sysdata->clock, interval);
+	nextForkTime = addtoclock(nextForkTime, interval);
+	sysdata->clock = addtoclock(sysdata->clock, interval);
 	unlocksem(0);  // unlock clock
 }
 
