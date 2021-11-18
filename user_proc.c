@@ -1,5 +1,5 @@
 // Author: Lexi Anderson
-// Last modified: Nov 17, 2021
+// Last modified: Nov 18, 2021
 // CS 4760, Project 5
 // user_proc.c
 
@@ -53,8 +53,8 @@ int main(int argc, char** argv) {
 	bool willterminate = false;  // should the process terminate?
 	bool allocatedrss = false;  // is the process currently holding resources?
 
-	copyclock(starttime, sysdata->clock);
-	copyclock(checktime, starttime);
+	starttime = copyclock(starttime, sysdata->clock);
+	checktime = copyclock(checktime, starttime);
 
 	while (!willterminate) {
 		// wait to receive message
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 		// update termination eligibility
 		if (!canterminate) {
 			// update end time to current system time
-			copyclock(endtime, sysdata->clock);
+			endtime = copyclock(endtime, sysdata->clock);
 
 			// check if 1 sec has elapsed since start
 			if (getclockdiff(endtime, starttime) >= MAX_NS)
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
 		// check termination criteria every 0-250ms
 
 		int ns = (rand() % 250) * 1e6;  // 1ms = 10^6ns
-		addtoclock(checktime, ns);  // update check time
+		checktime = addtoclock(checktime, ns);  // update check time
 
 		while (getns(checktime) > getns(sysdata->clock));  // wait before checking again
 	}

@@ -98,6 +98,22 @@ int main(int argc, char** argv) {
 	nextForkTime.s = 0;
 	nextForkTime.ns = 0;
 
+/*TEST*/
+	Queue* example = createqueue(11);
+	for (int i = 0; i < 11; i++) {
+		pushq(example, i);
+	}
+
+	int matrix[example->size][NUM_RSS];
+	for (int i = 0; i < example->size; i++) {
+		for (int j = 0; j < NUM_RSS; j++) {
+			matrix[i][j] = rand() % 5;
+		}
+	}
+
+	printmatrix("Example Matrix", example, matrix);
+/*ENDTEST*/
+
 	runsim();
 
 	printstats();
@@ -604,17 +620,17 @@ void printarray(char* header, int arr[NUM_RSS]) {
 void printmatrix(char* header, Queue* q, int mat[][NUM_RSS]) {
 	if (queueempty(q)) errexit("queueempty");
 
-	log("%s\n", header);
+	log("%s\n\t", header);
 
-	for (int i = 0; i < NUM_RSS; i++) log(" R%2d", i);
+	for (int i = 0; i < NUM_RSS; i++) log("R%-2d ", i);
 	log("\n");
 
 	for (int i = 0; i < q->capacity; i++) {
-		while (q->arr[i] == 0) continue;  // skip empty
+		//while (q->arr[i] == 0) continue;  // skip empty
 
-		log("p%2d ", i);
+		log("p%-2d\t", i);
 		for (int j = 0; j < NUM_RSS; j++) {
-			log(" %2d", mat[i][j]);
+			log(" %-2d ", mat[i][j]);
 		}
 		log("\n");
 	}
