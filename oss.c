@@ -5,6 +5,8 @@
 
 
 #include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,33 +14,16 @@
 #include <sys/sem.h>
 #include <sys/shm.h>
 #include <sys/time.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
+#include "clock.h"
 #include "queue.h"
 #include "shm.h"
 
 // termination criteria
 #define MAX_PROCS_GENERATED 40
 #define MAX_TIME 5
-
-static char* executable = NULL;
-
-static int shmid = -1;
-static int semid = -1;
-static int msgqid = -1;
-
-static SysData* sysdata = NULL;
-
-static Resource rss;  // resource descriptor
-static Queue* procq;
-static Clock* nextForkTime;
-
-static pid_t pids[MAX_USER_PROCS];
-static int activeprocs = 0;
-static int exitedprocs = 0;
-static int totalprocs = 0;
-
-volatile sig_atomic_t got_interrupt = 0;
-
 
 // function declarations
 
@@ -69,6 +54,28 @@ void printmatrix(char*, Queue*, int[][NUM_RSS]);
 void printstats();
 
 
+static char* executable = NULL;
+
+static int shmid = -1;
+static int semid = -1;
+static int msgqid = -1;
+
+static SysData* sysdata = NULL;
+
+static Resource* rss;  // resource descriptor
+static Queue* q;
+static Clock nextForkTime;
+static Message msg;
+
+static pid_t pids[MAX_USER_PROCS];
+static int activeprocs = 0;
+static int exitedprocs = 0;
+static int totalprocs = 0;
+static bool verbose = false;
+
+volatile sig_atomic_t got_interrupt = 0;
+
+
 
 int main(int argc, char** argv) {
 	setupsighandler();
@@ -90,7 +97,7 @@ int main(int argc, char** argv) {
 	nextForkTime.s = 0;
 	nextForkTime.ns = 0;
 
-	procq = createqueue(MAX_USER_PROCS);  // create empty process queue
+	q = createqueue(MAX_USER_PROCS);  // create empty process queue
 
 	runsim();
 
@@ -149,7 +156,7 @@ void initsysdata() {
 void initresources() {
 	for (int i = 0; i < NUM_RSS; i++)
 		// generate random number of instances
-		rss.instances[i] = rand() % 10 + 1;  // int in [1, 10]
+		rss->instances[i] = rand() % 10 + 1;  // int in [1, 10]
 
 	// determine which resources are shareable
 	int min = NUM_RSS * 0.15;
@@ -159,8 +166,8 @@ void initresources() {
 		bool set = false;
 		while (!set) {  // loop until a new shared resource has been set
 			int ind = rand() % NUM_RSS;
-			if (!rss.shareable[ind]) {
-				rss.shareable[ind] = true;
+			if (!rss->shareable[ind]) {
+				rss->shareable[ind] = true;
 				set = true;
 			}
 		}
@@ -255,6 +262,8 @@ void manageuserprocs() {
 		// receive response from user proc
 		msgrcv(msgqid, &msg, sizeof(Message), 1, 0);
 
+		bool hasrss = false; // process has resources to release
+
 		// get user process activity
 		switch (msg.activity) {
 			case REQUEST:
@@ -280,22 +289,21 @@ void manageuserprocs() {
 					log("\t%s granted P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
 				} else {
 					msg.gotrss = false;
-					log("\t%s denied P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata-clock.ns);
+					log("\t%s denied P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
 				}
 
 				break;
 
 			case RELEASE:
-				bool rsstorelease = false;
 				log("%s detected p%d releasing resources at time %d.%d:\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
 				for (int i = 0; i < NUM_RSS; i++) {
 					if (sysdata->pcb[pidsim].allocation[i] > 0) {
-						rsstorelease = true;
+						hasrss = true;
 						break;
 					}
 				}
 
-				if (rsstorelease) {
+				if (hasrss) {
 					for (int i = 0; i < NUM_RSS; i++) {
 						int alloc = sysdata->pcb[pidsim].allocation[i];
 						if (alloc > 0) {
@@ -312,9 +320,9 @@ void manageuserprocs() {
 
 				// release resources held by process
 				log("Resources released:\n");
-				bool hasrss = false;
+				hasrss = false;
 				for (int i = 0; i < NUM_RSS; i++) {
-					if (sysdata->lcb[pidsim].allocation[i] > 0) {
+					if (sysdata->pcb[pidsim].allocation[i] > 0) {
 						hasrss = true;
 						break;
 					}
@@ -349,11 +357,11 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 
 	int req[NUM_RSS];
 	int avail[NUM_RSS];  // actually available resources
-	int rss[NUM_RSS];  // hypothetically available resources used in deadlock detection
+	int dd[NUM_RSS];  // hypothetically available resources used in deadlock detection
 
 	// loop through queue
 	for (int i = 0; i < qsize; i++) {
-		for (j = 0; j < NUM_RSS; j++) {
+		for (int j = 0; j < NUM_RSS; j++) {
 			max[i][j] = sysdata->pcb[i].maximum[j];
 			alloc[i][j] = sysdata->pcb[i].allocation[j];
 			need[i][j] = max[i][j] - alloc[i][j];
@@ -362,16 +370,16 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 
 	// loop through resources
 	for (int i = 0; i < NUM_RSS; i++) {
-		avail[i] = rss.instances[i];
-		rss[i] = avail[i];
+		avail[i] = rss->instances[i];
+		dd[i] = avail[i];
 		req[i] = request[i];
 	}
 
-	for (int i = 0; i < count; i++) {
+	for (int i = 0; i < qsize; i++) {
 		for (int j = 0; j < NUM_RSS; j++) {
-			if (!rss.shareable[j]) {
+			if (!rss->shareable[j]) {
 				avail[j] -= alloc[i][j];
-				rss[i] = avail[i];
+				dd[i] = avail[i];
 			}
 		}
 	}
@@ -412,12 +420,12 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		int j;
 		for (int i = 0; i < qsize; i++) {
 			if (!done[i]) {
-				for (j = 0; j < NUM_RSS; j++) {
-					if (need[i][j] > rss[j]) break;
+				for (j = 0; j < NUM_RSS; j++)
+					if (need[i][j] > dd[j]) break;
 
 				if (j == NUM_RSS) {
 					for (int n = 0; n < NUM_RSS; n++)
-						rss[n] += alloc[i][j];
+						dd[n] += alloc[i][j];
 
 					allocseq[k++] = i;
 					done[i] = true;
@@ -485,7 +493,8 @@ void newuserproc(int pidsim) {
 int getpidsim() {
 	for (int i = 0; i < MAX_USER_PROCS; i++) {
 		if (pids[i] == 0) return i;
-	} else return(-1);
+	}
+	return(-1);
 }
 
 // Set up PCB for a process
@@ -497,7 +506,7 @@ void setupPCB(pid_t pid, int pidsim) {
 	for (int i = 0; i < NUM_RSS; i++) {
 		pcb->allocation[i] = 0;
 		pcb->request[i] = 0;
-		pcb->maximum[i] = (rand() % rss.instances[i]) + 1;
+		pcb->maximum[i] = (rand() % rss->instances[i]) + 1;
 	}
 }
 
@@ -530,15 +539,16 @@ void log(char* format, ...) {
 	va_end(args);
 
 	// print string to log
-	fprintf(fp, msg);
-/*TEST*/fprintf(stdout, msg);
+	fprintf(fp, "%s", msg);
+/*TEST*/fprintf(stdout, "%s", msg);
 
 	if (fclose(fp) == EOF) errexit("fclose");
 }
 
 // Print resource descriptors
 void printresources() {
-	if (queueempty()) errexit("queueempty");
+	if (queueempty(q)) errexit("queueempty");
+	int qsize = q->size;
 
 	int maximum[qsize][NUM_RSS];  // maximum matrix
 	int allocation[qsize][NUM_RSS];  // allocation matrix
@@ -546,13 +556,13 @@ void printresources() {
 
 	// loop through resources
 	for (int i = 0; i < NUM_RSS; i++)
-		available[i] = rss.instances[i];
+		available[i] = rss->instances[i];
 
 	// loop through queue
 	for (int i = 0, k = 0; i < q->capacity && k < q->size; i++) {
 		while (q->arr[i] == 0) continue;  // skip empty
 
-		for (j = 0; j < NUM_RSS; j++) {
+		for (int j = 0; j < NUM_RSS; j++) {
 			maximum[i][j] = sysdata->pcb[i].maximum[j];
 			allocation[i][j] = sysdata->pcb[i].allocation[j];
 			available[j] -= allocation[i][j];
@@ -560,8 +570,8 @@ void printresources() {
 		k++;
 	}
 
-	printarray("Total Resources", rss.instances);
-	printarray("Shared Resources", rss.shareable);
+	printarray("Total Resources", rss->instances);
+	printarray("Shared Resources", rss->shareable);
 	printarray("Available Resources", available);
 
 	printmatrix("Allocated Resources", q, allocation);
@@ -580,7 +590,7 @@ void printarray(char* header, int arr[NUM_RSS]) {
 }
 
 // Print contents of matrix
-void printmatrix(char* header, int mat[][NUM_RSS], Queue* q) {
+void printmatrix(char* header, Queue* q, int mat[][NUM_RSS]) {
 	if (queueempty(q)) errexit("queueempty");
 
 	log("%s\n", header);

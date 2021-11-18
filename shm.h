@@ -24,7 +24,6 @@
 typedef struct {
 	int instances[NUM_RSS];
 	int shareable[NUM_RSS];
-
 } Resource;
 
 typedef struct {
@@ -38,7 +37,6 @@ typedef struct {
 typedef struct {
 	Clock clock;
 	PCB pcb[MAX_USER_PROCS];
-
 } SysData;
 
 typedef struct {
@@ -50,6 +48,12 @@ typedef struct {
 	int request[NUM_RSS];
 	bool gotrss;
 } Message;
+
+enum Activity {
+	REQUEST,
+	RELEASE,
+	TERMINATE,
+};
 
 
 // function declarations

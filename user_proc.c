@@ -4,19 +4,18 @@
 // user_proc.c
 
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/msg.h>
+#include <sys/shm.h>
 #include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 #include "clock.h"
 #include "queue.h"
 #include "shm.h"
 
-
-enum activity {
-	REQUEST,
-	RELEASE,
-	TERMINATE,
-};
 
 static char* executable;
 

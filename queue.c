@@ -55,21 +55,22 @@ bool queueempty(Queue* q) { return (q->size == 0); }
 void rotatequeue(Queue* q) {
 	if (q->head != 0) {
 		int shift = q->head;
-		int tmp[NUM_RSS];
+		int tmp[q->capacity];
 
-		for (int i = 0; i < q->capacity; i++)
+		for (int i = 0; i < q->capacity; i++) {
 			tmp[i] = q->arr[(shift + i) % q->capacity];
+		}
 
-		memcpy(q->arr, tmp, NUM_RSS);
+		memcpy(q->arr, tmp, q->capacity);
 		free(tmp);
 	}
 }
 
 void removefromqueue(Queue* q, int index) {
 	if (!queueempty(q)) {
-		if (ind = q->head) popq(q);
+		if (index == q->head) popq(q);
 		else {
-			q->arr[ind] = 0;
+			q->arr[index] = 0;
 			q->size -= 1;
 		}
 	}
