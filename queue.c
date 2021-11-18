@@ -64,3 +64,13 @@ void rotatequeue(Queue* q) {
 		free(tmp);
 	}
 }
+
+void removefromqueue(Queue* q, int index) {
+	if (!queueempty(q)) {
+		if (ind = q->head) popq(q);
+		else {
+			q->arr[ind] = 0;
+			q->size -= 1;
+		}
+	}
+}

@@ -4,7 +4,7 @@
 # Makefile
 
 CC = gcc
-CFLAGS = -g -Wall -Wshadow
+CFLAGS = -g -Wall #-Wshadow
 TAR = oss user_proc
 
 OSS = oss
