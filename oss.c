@@ -521,12 +521,10 @@ void tryfork() {
 
 // Create a new user process
 void newuserproc(int pidsim) {
-	printf("Starting process with pidsim %d\n", pidsim);
 	pid_t pid = fork();
 	pids[pidsim] = pid;
 	if (pid == -1) errexit("fork");
 	else if (pid == 0) { // child; generate new user proc
-		printf("Executing user process %d\n", pidsim);
 		char arg[MSG_SZ];
 		snprintf(arg, MSG_SZ, "%d", pidsim);
 		execl("./user_proc", "user_proc", arg, (char*)NULL);
@@ -628,19 +626,20 @@ void printresources() {
 	printarray("Total Resources", rss.instances);
 	printarray("Shared Resources", rss.shareable);
 	printarray("Available Resources", available);
-
+	log("\n");
 	printmatrix("Allocated Resources", q, allocation);
 	printmatrix("Maximum Resources", q, maximum);
+	log("\n--------------------\n");
 }
 
 // Print contents of array
 void printarray(char* header, int arr[NUM_RSS]) {
-	log("%s\n", header);
+	log("\n%s\n", header);
 
-	for (int i = 0; i < NUM_RSS; i++) log(" R%2d", i);
+	for (int i = 0; i < NUM_RSS; i++) log(" R%-2d", i);
 	log("\n");
 
-	for (int i = 0; i < NUM_RSS; i++) log(" %2d", arr[i]);
+	for (int i = 0; i < NUM_RSS; i++) log(" %-3d", arr[i]);
 	log("\n");
 }
 
@@ -648,7 +647,7 @@ void printarray(char* header, int arr[NUM_RSS]) {
 void printmatrix(char* header, Queue* q, int mat[][NUM_RSS]) {
 	if (queueempty(q)) errexit("queueempty");
 
-	log("%s\n\t", header);
+	log("\n%s\n\t", header);
 
 	for (int i = 0; i < NUM_RSS; i++) log("R%-2d ", i);
 	log("\n");
