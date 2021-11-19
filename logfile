@@ -1,18 +1,39 @@
-./oss detected process p0 requesting the following resources at time 1.489702565:
+./oss detected process p0 requesting the following resources at time 0.392474864:
+	0 instances of R0
+	0 instances of R1
+	0 instances of R2
+	0 instances of R3
+	0 instances of R4
+	0 instances of R5
+	0 instances of R6
+	0 instances of R7
+	0 instances of R8
+	0 instances of R9
+	0 instances of R10
+	0 instances of R11
+	0 instances of R12
+	0 instances of R13
+	0 instances of R14
+	0 instances of R15
+	0 instances of R16
+	0 instances of R17
+	0 instances of R18
+	0 instances of R19
 
-	./oss granted P0 request at time 1.489702565
+	Unsafe state after granting request
+	./oss denied P0 request at time 0.392474864
 
 Total Resources
  R0  R1  R2  R3  R4  R5  R6  R7  R8  R9  R10 R11 R12 R13 R14 R15 R16 R17 R18 R19
- 10  2   2   2   10  8   1   10  2   2   5   4   4   10  8   1   5   7   10  2  
+ 10  8   7   6   8   7   8   8   9   6   8   3   8   3   3   6   10  10  10  4  
 
 Shared Resources
  R0  R1  R2  R3  R4  R5  R6  R7  R8  R9  R10 R11 R12 R13 R14 R15 R16 R17 R18 R19
- 0   0   1   0   0   0   0   0   1   1   0   0   0   0   0   0   0   0   1   0  
+ 1   1   1   0   0   0   0   0   1   0   0   0   0   0   0   0   0   1   0   0  
 
 Available Resources
  R0  R1  R2  R3  R4  R5  R6  R7  R8  R9  R10 R11 R12 R13 R14 R15 R16 R17 R18 R19
- 10  2   2   2   10  8   1   10  2   2   5   4   4   10  8   1   5   7   10  2  
+ 10  8   7   6   8   7   8   8   9   6   8   3   8   3   3   6   10  10  10  4  
 
 
 Allocated Resources
@@ -21,12 +42,12 @@ p0 	 0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0  
 
 Maximum Resources
 	R0  R1  R2  R3  R4  R5  R6  R7  R8  R9  R10 R11 R12 R13 R14 R15 R16 R17 R18 R19 
-p0 	 10  1   2   1   4   1   1   7   2   2   5   4   1   8   3   1   4   5   3   1  
+p0 	 1   8   6   5   1   6   1   2   9   5   7   3   3   3   1   2   4   9   10  3  
 
 --------------------
 
 
-Program ended at system time 1.750635036
+Program ended at system time 0.432766814
 1 total processes executed
 0 processes exited previously
 1 processes active at time of termination

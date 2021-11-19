@@ -25,8 +25,6 @@ static int msgqid = -1;
 static SysData* sysdata = NULL;
 static Message msg;
 
-int pidsim;
-
 // function declarations
 void initIPC();
 void errexit(char*);
@@ -40,10 +38,16 @@ int main(int argc, char** argv) {
 	signal(SIGUSR1, sighandler);
 
 	executable = argv[0];  // get current executable name
-	pidsim = atoi(argv[1]);
+	int pidsim = atoi(argv[1]);
+	printf("Current user proc pidsim is %d\n", pidsim);
 
 	initIPC();
-	puts("User IPC initialized");
+	puts("User proc IPC initialized");
+
+/*TEST*/
+	for (int i = 0; i < NUM_RSS; i++) {
+		printf("%d ", sysdata->pcb[pidsim].maximum[i]);
+	}
 
 	// seed rand with a function of time, pid and bitwise ops
 	srand((getpid() >> 8) ^ time(NULL));
@@ -56,7 +60,6 @@ int main(int argc, char** argv) {
 
 	starttime = copyclock(sysdata->clock);
 	checktime = copyclock(starttime);
-	printf("Process %d starting at %d.%d\n", pidsim, sysdata->clock.s, sysdata->clock.ns);
 
 	while (!willterminate) {
 		// wait to receive message
@@ -88,9 +91,8 @@ int main(int argc, char** argv) {
 		switch (act) {
 			case 0: // request
 				for (int i = 0; i < NUM_RSS; i++) {
-					// get max request amount
-					int max = sysdata->pcb[pidsim].maximum[i] - sysdata->pcb[pidsim].allocation[i];
-					msg.request[i] = rand() % (max + 1);
+					int need = sysdata->pcb[pidsim].maximum[i] - sysdata->pcb[pidsim].allocation[i];
+					msg.request[i] = rand() % (need + 1);
 				}
 
 				msgsnd(msgqid, &msg, sizeof(Message), 0);
@@ -111,7 +113,7 @@ int main(int argc, char** argv) {
 
 		// check termination criteria every 0-250ms
 
-		int ns = (rand() % 250) * 1e6;  // 1ms = 10^6ns
+		int ns = (rand() % 250) * (int)1e6;  // 1ms = 10^6ns
 		checktime = addtoclock(checktime, ns);  // update check time
 
 		while (getns(checktime) > getns(sysdata->clock));  // wait before checking again

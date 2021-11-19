@@ -271,22 +271,23 @@ void runsim() {
 
 // Communicate with user procs via message queue and act accordingly
 void manageuserprocs() {
+	int next = q->head;  // index of next proc to run
+	int count = 0;
+	bool hasrss = false;
+	int numrss = 0;
+
 	while (!queueempty(q)) {
 		updateclock();
 
-		// tell next process to run
-		int pidsim = q->head;
-		int count = 0;
-
-		msg.pid = sysdata->pcb[pidsim].pid;
-		msg.pidsim = sysdata->pcb[pidsim].pidsim;
+		msg.pid = sysdata->pcb[next].pid;
+		msg.pidsim = sysdata->pcb[next].pidsim;
 		msg.type = msg.pid;
+
+		// tell user proc to run
 		msgsnd(msgqid, &msg, sizeof(Message), 0);
 
 		// receive response from user proc
 		msgrcv(msgqid, &msg, sizeof(Message), 1, 0);
-
-		bool hasrss = false; // process has resources to release
 
 		// get user process activity
 		switch (msg.activity) {
@@ -294,93 +295,107 @@ void manageuserprocs() {
 				log("%s detected process p%d requesting the following resources at time %d.%d:\n", executable, msg.pidsim, sysdata->clock.s, sysdata->clock.ns);
 
 				for (int i = 0; i < NUM_RSS; i++) {
-					if (msg.request[i] == 0) continue;
+//					if (msg.request[i] == 0) continue;
 					log("\t%d instances of R%d\n", msg.request[i], i);
 				}
 				log("\n");
 
 				// check that request is safe
-				bool safe = deadlockdetect(q, pidsim, msg.request);
+				bool safe = deadlockdetect(q, next, msg.request);
 				if (safe) {
-					bool gotrss = false;
+					hasrss = false;
+					numrss = 0;
 					for (int i = 0; i < NUM_RSS; i++) {
-						if (msg.request[i] > 0) gotrss = true;
-						sysdata->pcb[pidsim].allocation[i] += msg.request[i];
+						if (msg.request[i] > 0) {
+							hasrss = true;
+							numrss++;
+						}
+						sysdata->pcb[next].allocation[i] += msg.request[i];
 						msg.request[i] = 0;
 					}
 
-					msg.gotrss = gotrss;
-					log("\t%s granted P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
+					msg.gotrss = (numrss > 0);
+					log("\t%s granted P%d request at time %d.%d\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
 				} else {
 					msg.gotrss = false;
-					log("\t%s denied P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
+					log("\t%s denied P%d request at time %d.%d\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
 				}
 
-				msg.type = sysdata->pcb[pidsim].pid;
+				msg.type = sysdata->pcb[next].pid;
 				msgsnd(msgqid, &msg, sizeof(Message), 0);
 
 				break;
 
 			case RELEASE:
-				log("%s detected p%d releasing resources at time %d.%d:\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
+				log("%s detected p%d releasing resources at time %d.%d:\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
+				numrss = 0;
+
 				for (int i = 0; i < NUM_RSS; i++) {
-					if (sysdata->pcb[pidsim].allocation[i] > 0) {
+					if (sysdata->pcb[next].allocation[i] > 0) {
 						hasrss = true;
-						break;
+						numrss++;
 					}
 				}
 
-				if (hasrss) {
+				if (numrss > 0) {
 					for (int i = 0; i < NUM_RSS; i++) {
-						int alloc = sysdata->pcb[pidsim].allocation[i];
+						int alloc = sysdata->pcb[next].allocation[i];
 						if (alloc > 0) {
 							log("\t%d instances of R%d\n", alloc, i);
-							sysdata->pcb[pidsim].allocation[i] = 0;
 						}
+						sysdata->pcb[next].allocation[i] = 0;
 					}
+					log("\n");
 				} else log("\tNo resources released.\n");
 
 				break;
 
 			case TERMINATE:
-				log("Process p%d terminated at time %d.%d\n", pidsim, sysdata->clock.s, sysdata->clock.ns);
+				log("Process p%d terminated at time %d.%d\n", next, sysdata->clock.s, sysdata->clock.ns);
 
 				// release resources held by process
 				log("Resources released:\n");
 				hasrss = false;
+				numrss = 0;
 				for (int i = 0; i < NUM_RSS; i++) {
-					if (sysdata->pcb[pidsim].allocation[i] > 0) {
+					if (sysdata->pcb[next].allocation[i] > 0) {
 						hasrss = true;
-						break;
+						numrss++;
 					}
 				}
 
-				if (hasrss) {
+				if (numrss > 0) {
 					for (int i = 0; i < NUM_RSS; i++) {
-						int alloc = sysdata->pcb[pidsim].allocation[i];
+						int alloc = sysdata->pcb[next].allocation[i];
 						if (alloc > 0) {
 							log("\t%d instances of R%d\n", alloc, i);
-							sysdata->pcb[pidsim].allocation[i] = 0;
 						}
+						sysdata->pcb[next].allocation[i] = 0;
+						sysdata->pcb[next].maximum[i] = 0;
 					}
+					log("\n");
 				} else log("\tNo resources released.\n");
 
 				// remove process from queue
-				removefromqueue(q, pidsim);
+				removefromqueue(q, next);
 
 				break;
 		}
+
 		printresources();
 		if (msg.activity == TERMINATE) continue;
 		count++;
+		next = q->head;
 	}
 }
 
 bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	int qsize = q->size;
-	if (qsize <= 1) return true;  // only 1 active process
+	if (qsize == 0) return true;  // only 1 active process
 
-	int pidsim = q->head;
+	int next = 0;
+
+//	int pidsim = q->head;
 	int max[qsize][NUM_RSS];
 	int alloc[qsize][NUM_RSS];
 	int need[qsize][NUM_RSS];
@@ -389,31 +404,31 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	int avail[NUM_RSS];  // actually available resources
 	int dd[NUM_RSS];  // hypothetically available resources used in deadlock detection
 
-	// loop through queue
-	for (int i = 0; i < q->capacity; i++) {
-		if (q->arr[i] == -1) continue;
+	// copy user proc resource data
+	for (int i = 0; i < qsize; i++) {
+		if (q->arr[i] == -1) {
+			memset(max[i], 0, qsize * sizeof(int));
+			memset(alloc[i], 0, qsize * sizeof(int));
+			memset(need[i], 0, qsize * sizeof(int));
+			continue;
+		}
 		for (int j = 0; j < NUM_RSS; j++) {
-			max[i][j] = sysdata->pcb[i].maximum[j];
-			alloc[i][j] = sysdata->pcb[i].allocation[j];
+			max[i][j] = sysdata->pcb[next].maximum[j];
+			alloc[i][j] = sysdata->pcb[next].allocation[j];
 			need[i][j] = max[i][j] - alloc[i][j];
 		}
+		next++;
 	}
 
-	// loop through resources
 	for (int i = 0; i < NUM_RSS; i++) {
 		avail[i] = rss.instances[i];
-		dd[i] = avail[i];
 		req[i] = request[i];
 	}
 
-	for (int i = 0; i < q->capacity; i++) {
-		if (q->arr[i] == -1) continue;
-		for (int j = 0; j < NUM_RSS; j++) {
-			if (!rss.shareable[j]) {
-				avail[j] -= alloc[i][j];
-				dd[i] = avail[i];
-			}
-		}
+	for (int i = 0; i < qsize; i++) {
+		for (int j = 0; j < NUM_RSS; j++)
+			if (!rss.shareable[j]) avail[j] -= alloc[i][j];
+		dd[i] = avail[i];
 	}
 
 	if (verbose) {
@@ -423,11 +438,16 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		printmatrix("Resources Needed", q, need);
 	}
 
-	bool done[q->capacity];
-	int allocseq[q->capacity];  // resource allocation sequence
+	bool done[qsize];
+	int allocseq[qsize];  // resource allocation sequence
 
+	for (int j = 0; j < qsize; j++) {
+		done[j] = false;
+	}
+
+	next = ind;
 	for (int j = 0; j < NUM_RSS; j++) {
-		if (need[ind][j] < req[j]) {
+		if (need[next][j] < req[j]) {
 			log("%s detected that process p%d's request exceeds needed resources at time %d.%d\n", executable, ind, sysdata->clock.s, sysdata->clock.ns);
 			if (verbose) {
 				printarray("Available Resources", avail);
@@ -438,8 +458,8 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 
 		if (req[j] <= avail[j]) {  // there are enough available rss
 			avail[j] -= req[j];
-			alloc[ind][j] += req[j];
-			need[ind][j] -= req[j];
+			alloc[next][j] += req[j];
+			need[next][j] -= req[j];
 		} else {
 			log("\tNot enough available resources at time %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
 			if (verbose) {
@@ -455,15 +475,14 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	while (k < qsize) {
 		bool found = false;
 		int j;
-		for (int i = 0; i < q->capacity; i++) {
-			if (q->arr[i] == -1) continue;
+		for (int i = 0; i < qsize; i++) {
 			if (!done[i]) {
 				for (j = 0; j < NUM_RSS; j++)
 					if (need[i][j] > dd[j]) break;
 
 				if (j == NUM_RSS) {
 					for (int n = 0; n < NUM_RSS; n++)
-						dd[n] += alloc[i][j];
+						dd[n] += alloc[i][n];
 
 					allocseq[k++] = i;
 					done[i] = true;
@@ -555,9 +574,9 @@ void setupPCB(pid_t pid, int pidsim) {
 	pcb->pidsim = pidsim;
 
 	for (int i = 0; i < NUM_RSS; i++) {
-		pcb->allocation[i] = 0;
-		pcb->request[i] = 0;
 		pcb->maximum[i] = (rand() % rss.instances[i]) + 1;
+		pcb->allocation[i] = 0;
+//		pcb->request[i] = 0;
 	}
 }
 
