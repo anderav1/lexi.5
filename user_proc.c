@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
 	pidsim = atoi(argv[1]);
 
 	initIPC();
+	puts("User IPC initialized");
 
 	// seed rand with a function of time, pid and bitwise ops
 	srand((getpid() >> 8) ^ time(NULL));
@@ -53,17 +54,20 @@ int main(int argc, char** argv) {
 	bool willterminate = false;  // should the process terminate?
 	bool allocatedrss = false;  // is the process currently holding resources?
 
-	starttime = copyclock(starttime, sysdata->clock);
-	checktime = copyclock(checktime, starttime);
+	starttime = copyclock(sysdata->clock);
+	checktime = copyclock(starttime);
+	printf("Process %d starting at %d.%d\n", pidsim, sysdata->clock.s, sysdata->clock.ns);
 
 	while (!willterminate) {
 		// wait to receive message
 		msgrcv(msgqid, &msg, sizeof(Message), getpid(), 0);
 
+		printf("Process p%d received message\n", pidsim);
+
 		// update termination eligibility
 		if (!canterminate) {
 			// update end time to current system time
-			endtime = copyclock(endtime, sysdata->clock);
+			endtime = copyclock(sysdata->clock);
 
 			// check if 1 sec has elapsed since start
 			if (getclockdiff(endtime, starttime) >= MAX_NS)
@@ -77,6 +81,7 @@ int main(int argc, char** argv) {
 			act = rand() % 3;
 		} while ((act == 1 && !allocatedrss) || (act == 2 && !canterminate));
 
+		printf("Activity %d chosen for process p%d\n", act, pidsim);
 		msg.type = 1;
 		msg.activity = act;
 

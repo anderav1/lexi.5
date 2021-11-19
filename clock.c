@@ -1,5 +1,5 @@
 // Lexi Anderson
-// Last modified: Nov 10, 2021
+// Last modified: Nov 19, 2021
 // CS 4760, Project 5
 // clock.c -- Define Clock functionality
 
@@ -9,7 +9,8 @@
 #include "clock.h"
 
 
-Clock setclock(Clock clock, int ns) {
+Clock setclock(int ns) {
+	Clock clock;
 	clock.s = 0;
 	clock.ns = ns;
 
@@ -42,29 +43,26 @@ Clock subtractfromclock(Clock tar, Clock diff) {
 	int difftons = getns(diff);
 
 	// set clock
-	return setclock(tar, tartons - difftons);
+	return setclock(tartons - difftons);
 }
 
 // Reset clock to zero
-Clock resetclock(Clock clock) {
+Clock resetclock() {
+	Clock clock;
 	clock.s = 0;
 	clock.ns = 0;
 
 	return clock;
 }
 
-// Copy the value of Clock src to Clock tar
-Clock copyclock(Clock tar, Clock src) {
-	tar.s = src.s;
-	tar.ns = src.ns;
-
-	return tar;
+// Copy the value of Clock src
+Clock copyclock(Clock src) {
+	return src;
 }
 
 // Get minuend - subtrahend in ns
 int getclockdiff(Clock minuend, Clock subtrahend) {
-	Clock temp;
-	copyclock(temp, minuend);
+	Clock temp = copyclock(minuend);
 	subtractfromclock(temp, subtrahend);
 	return getns(temp);
 }

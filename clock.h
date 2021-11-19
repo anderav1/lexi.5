@@ -18,12 +18,12 @@ typedef struct {
 } Clock;
 
 
-Clock setclock(Clock, int);
+Clock setclock(int);
 int getns(Clock);
 Clock addtoclock(Clock, int);
 Clock subtractfromclock(Clock, Clock);
-Clock resetclock(Clock);
-Clock copyclock(Clock, Clock);
+Clock resetclock();
+Clock copyclock(Clock);
 int getclockdiff(Clock, Clock);
 
 

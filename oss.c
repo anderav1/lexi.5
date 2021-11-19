@@ -1,5 +1,5 @@
 // Author: Lexi Anderson
-// Last modified: Nov 17, 2021
+// Last modified: Nov 19, 2021
 // CS 4760, Project 5
 // oss.c
 
@@ -64,7 +64,6 @@ static SysData* sysdata = NULL;
 
 static Resource rss;  // resource descriptor
 static Queue* q;
-static Clock nextForkTime;
 static Message msg;
 
 static pid_t pids[MAX_USER_PROCS];
@@ -95,10 +94,9 @@ int main(int argc, char** argv) {
 	initresources();  // resource descriptors
 
 	// set next fork time
-	nextForkTime.s = 0;
-	nextForkTime.ns = 0;
 
 /*TEST*/
+/*
 	Queue* example = createqueue(11);
 	printqueue(example);
 
@@ -112,28 +110,10 @@ int main(int argc, char** argv) {
 			printqueue(example);
 		}
 	}
-
-	int index = 3;
-	printf("Removing item at index %d\n", index);
-	removefromqueue(example, index);
-	printqueue(example);
-
-	index = 7;
-	printf("Removing item at index %d\n", index);
-	removefromqueue(example, index);
-	printqueue(example);
-
-	int matrix[example->capacity][NUM_RSS];
-	for (int i = 0; i < example->capacity; i++) {
-		if (example->arr[i] == -1) continue;
-		for (int j = 0; j < NUM_RSS; j++) {
-			matrix[i][j] = rand() % 5;
-		}
-	}
-
-	printmatrix("Example Matrix", example, matrix);
+*/
 /*ENDTEST*/
 
+// TODO: queue is manifesting correctly; update oss to coordinate with changes
 	runsim();
 
 	printstats();
@@ -175,6 +155,9 @@ void initsysdata() {
 	// set system clock
 	sysdata->clock.s = 0;
 	sysdata->clock.ns = 0;
+
+	sysdata->nextForkTime.s = 0;
+	sysdata->nextForkTime.ns = 0;
 
 	// set initial values for pcb
 	for (int i = 0; i < MAX_USER_PROCS; i++) {
@@ -259,7 +242,7 @@ void unlocksem(int ind) {
 
 // Run the simulation
 void runsim() {
-	while (!got_interrupt) {
+	while (!got_interrupt && sysdata->clock.s < MAX_TIME) {
 		tryfork();
 		updateclock();
 		manageuserprocs();
@@ -293,6 +276,7 @@ void manageuserprocs() {
 
 		// tell next process to run
 		int pidsim = q->head;
+		int count = 0;
 
 		msg.pid = sysdata->pcb[pidsim].pid;
 		msg.pidsim = sysdata->pcb[pidsim].pidsim;
@@ -310,8 +294,8 @@ void manageuserprocs() {
 				log("%s detected process p%d requesting the following resources at time %d.%d:\n", executable, msg.pidsim, sysdata->clock.s, sysdata->clock.ns);
 
 				for (int i = 0; i < NUM_RSS; i++) {
-					if (msg.request[i] > 0)
-						log("\t%d instances of R%d\n", msg.request[i], i);
+					if (msg.request[i] == 0) continue;
+					log("\t%d instances of R%d\n", msg.request[i], i);
 				}
 				log("\n");
 
@@ -331,6 +315,9 @@ void manageuserprocs() {
 					msg.gotrss = false;
 					log("\t%s denied P%d request at time %d.%d\n", executable, pidsim, sysdata->clock.s, sysdata->clock.ns);
 				}
+
+				msg.type = sysdata->pcb[pidsim].pid;
+				msgsnd(msgqid, &msg, sizeof(Message), 0);
 
 				break;
 
@@ -383,6 +370,9 @@ void manageuserprocs() {
 
 				break;
 		}
+		printresources();
+		if (msg.activity == TERMINATE) continue;
+		count++;
 	}
 }
 
@@ -509,20 +499,32 @@ void errexit(char* msg) {
 
 // Check fork criteria
 void tryfork() {
+	if (sysdata->clock.s >= MAX_TIME) return;
 	if (activeprocs >= MAX_USER_PROCS) return;
 	if (totalprocs >= MAX_PROCS_GENERATED) return;
 	if (got_interrupt) return;
+	if (sysdata->nextForkTime.s > sysdata->clock.s || 
+		(sysdata->nextForkTime.s == sysdata->clock.s && sysdata->nextForkTime.ns > sysdata->clock.ns)) return;
 
-	resetclock(nextForkTime);
+	locksem(0);
+	sysdata->nextForkTime.s = sysdata->clock.s;
+	sysdata->nextForkTime.ns = sysdata->clock.ns;
+	int ns = rand() % (int)1e6 + 1;
+	sysdata->nextForkTime = addtoclock(sysdata->nextForkTime, ns);
+	unlocksem(0);
 
+	puts("Can fork; getting pidsim");
 	int pidsim = getpidsim();
+	printf("Got pidsim %d\n", pidsim);
 	if (pidsim != -1) newuserproc(pidsim);
 }
 
 // Create a new user process
 void newuserproc(int pidsim) {
+	printf("Starting process with pidsim %d\n", pidsim);
 	pid_t pid = fork();
-	if ((pids[pidsim] = pid) == -1) errexit("fork");
+	pids[pidsim] = pid;
+	if (pid == -1) errexit("fork");
 	else if (pid == 0) { // child; generate new user proc
 		printf("Executing user process %d\n", pidsim);
 		char arg[MSG_SZ];
@@ -536,6 +538,8 @@ void newuserproc(int pidsim) {
 	pushq(q, pidsim);  // push new proc onto queue
 	activeprocs++;
 	totalprocs++;
+/*TEST*/
+	printqueue(q);
 }
 
 // Get the index of the next available pid
@@ -562,10 +566,13 @@ void setupPCB(pid_t pid, int pidsim) {
 // Increment the clock by a random interval
 void updateclock() {
 	locksem(0);  // lock clock
-	int interval = rand() % (10 * MAX_NS) + 1;
-	nextForkTime = addtoclock(nextForkTime, interval);
+	int interval = rand() % (10 * MAX_NS) + 1;  // increment clock
 	sysdata->clock = addtoclock(sysdata->clock, interval);
+	sysdata->nextForkTime = addtoclock(sysdata->nextForkTime, interval);
 	unlocksem(0);  // unlock clock
+
+	printf("Sys time: %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
+	printf("Next fork: %d.%d\n", sysdata->nextForkTime.s, sysdata->nextForkTime.ns);
 }
 
 // Erase any contents already in the log file

@@ -36,6 +36,7 @@ typedef struct {
 
 typedef struct {
 	Clock clock;
+	Clock nextForkTime;
 	PCB pcb[MAX_USER_PROCS];
 } SysData;
 
