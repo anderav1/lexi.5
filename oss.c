@@ -288,14 +288,18 @@ void manageuserprocs() {
 
 		// receive response from user proc
 		msgrcv(msgqid, &msg, sizeof(Message), 1, 0);
+/*TEST*/
+		for (int i = 0; i < NUM_RSS; i++) {
+			printf("%d, ", msg.request[i]);
+		}
 
 		// get user process activity
 		switch (msg.activity) {
 			case REQUEST:
-				log("%s detected process p%d requesting the following resources at time %d.%d:\n", executable, msg.pidsim, sysdata->clock.s, sysdata->clock.ns);
+				log("[%1d.%9d] %s detected process p%d requesting the following resources:\n", sysdata->clock.s, sysdata->clock.ns, executable, msg.pidsim);
 
 				for (int i = 0; i < NUM_RSS; i++) {
-//					if (msg.request[i] == 0) continue;
+					if (msg.request[i] == 0) continue;
 					log("\t%d instances of R%d\n", msg.request[i], i);
 				}
 				log("\n");
@@ -315,10 +319,10 @@ void manageuserprocs() {
 					}
 
 					msg.gotrss = (numrss > 0);
-					log("\t%s granted P%d request at time %d.%d\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
+					log("[%2d.%9d] \t%s granted P%d request\n", sysdata->clock.s, sysdata->clock.ns, executable, next);
 				} else {
 					msg.gotrss = false;
-					log("\t%s denied P%d request at time %d.%d\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
+					log("\t[%2d.%9d] %s denied P%d request\n", sysdata->clock.s, sysdata->clock.ns, executable, next);
 				}
 
 				msg.type = sysdata->pcb[next].pid;
@@ -327,7 +331,7 @@ void manageuserprocs() {
 				break;
 
 			case RELEASE:
-				log("%s detected p%d releasing resources at time %d.%d:\n", executable, next, sysdata->clock.s, sysdata->clock.ns);
+				log("[%2d.%9d] %s detected p%d releasing resources:\n", sysdata->clock.s, sysdata->clock.ns, executable, next);
 				numrss = 0;
 
 				for (int i = 0; i < NUM_RSS; i++) {
@@ -351,7 +355,7 @@ void manageuserprocs() {
 				break;
 
 			case TERMINATE:
-				log("Process p%d terminated at time %d.%d\n", next, sysdata->clock.s, sysdata->clock.ns);
+				log("[%2d.%9d] Process p%d terminated\n", sysdata->clock.s, sysdata->clock.ns, next);
 
 				// release resources held by process
 				log("Resources released:\n");
@@ -448,7 +452,7 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 	next = ind;
 	for (int j = 0; j < NUM_RSS; j++) {
 		if (need[next][j] < req[j]) {
-			log("%s detected that process p%d's request exceeds needed resources at time %d.%d\n", executable, ind, sysdata->clock.s, sysdata->clock.ns);
+			log("[%2d.%9d] %s detected that process p%d's request exceeds needed resources at time %d.%d\n", sysdata->clock.s, sysdata->clock.ns, executable, ind);
 			if (verbose) {
 				printarray("Available Resources", avail);
 				printmatrix("Resources Needed", q, need);
@@ -461,7 +465,7 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 			alloc[next][j] += req[j];
 			need[next][j] -= req[j];
 		} else {
-			log("\tNot enough available resources at time %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
+			log("\t[%2d.%9d] Not enough available resources\n", sysdata->clock.s, sysdata->clock.ns);
 			if (verbose) {
 				printarray("Available Resources", avail);
 				printmatrix("Resources Needed", q, need);
@@ -492,7 +496,7 @@ bool deadlockdetect(Queue* q, int ind, int request[NUM_RSS]) {
 		}
 
 		if (!found) {
-			log("\tUnsafe state after granting request\n");
+			log("\tGranting request would result in unsafe state\n");
 			return false;
 		}
 	}
@@ -519,7 +523,7 @@ void errexit(char* msg) {
 // Check fork criteria
 void tryfork() {
 	if (sysdata->clock.s >= MAX_TIME) return;
-	if (activeprocs >= MAX_USER_PROCS) return;
+	if (q->size >= MAX_USER_PROCS) return;
 	if (totalprocs >= MAX_PROCS_GENERATED) return;
 	if (got_interrupt) return;
 	if (sysdata->nextForkTime.s > sysdata->clock.s || 
@@ -532,9 +536,7 @@ void tryfork() {
 	sysdata->nextForkTime = addtoclock(sysdata->nextForkTime, ns);
 	unlocksem(0);
 
-	puts("Can fork; getting pidsim");
 	int pidsim = getpidsim();
-	printf("Got pidsim %d\n", pidsim);
 	if (pidsim != -1) newuserproc(pidsim);
 }
 
@@ -555,8 +557,6 @@ void newuserproc(int pidsim) {
 	pushq(q, pidsim);  // push new proc onto queue
 	activeprocs++;
 	totalprocs++;
-/*TEST*/
-	printqueue(q);
 }
 
 // Get the index of the next available pid
@@ -587,9 +587,6 @@ void updateclock() {
 	sysdata->clock = addtoclock(sysdata->clock, interval);
 	sysdata->nextForkTime = addtoclock(sysdata->nextForkTime, interval);
 	unlocksem(0);  // unlock clock
-
-	printf("Sys time: %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
-	printf("Next fork: %d.%d\n", sysdata->nextForkTime.s, sysdata->nextForkTime.ns);
 }
 
 // Erase any contents already in the log file
@@ -684,7 +681,7 @@ void printmatrix(char* header, Queue* q, int mat[][NUM_RSS]) {
 
 // Print program statistics
 void printstats() {
-	log("\n\nProgram ended at system time %d.%d\n", sysdata->clock.s, sysdata->clock.ns);
+	log("\n\nProgram ended at system time [%2d.%9d]\n", sysdata->clock.s, sysdata->clock.ns);
 	log("%d total processes executed\n", totalprocs);
 	log("%d processes exited previously\n", exitedprocs);
 	log("%d processes active at time of termination\n", activeprocs);

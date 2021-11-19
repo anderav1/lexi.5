@@ -12,7 +12,7 @@
 
 #define LOG_FILE "logfile"
 
-#define IPC_FTOK "./Makefile"
+#define IPC_FTOK "."
 #define IPC_PERM (S_IRUSR | S_IWUSR)
 
 #define MAX_USER_PROCS 18
@@ -30,7 +30,6 @@ typedef struct {
 	pid_t pid;
 	int pidsim;  // simulated pid
 	int allocation[NUM_RSS];  // allocated resources
-	int request[NUM_RSS];  // requested resources
 	int maximum[NUM_RSS];  // max number of instances of resource
 } PCB;
 
